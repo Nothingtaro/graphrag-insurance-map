@@ -1,87 +1,158 @@
-# แผนที่ความรู้ความคุ้มครองประกันรถยนต์ (GraphRAG)
+# GraphRAG Motor Insurance Coverage Map
 
-Port ของ Claude artifact (`claude.ai/artifact/25KjfFXeYpqBHDLXbTHnYi`) มาเป็นโปรเจกต์ที่รันบนเครื่องได้
+**An interactive knowledge graph and AI assistant for Thai motor insurance policy wordings.**
+Ask a question in plain Thai ("I have a BYD Atto 3 with Type 1 cover and it caught fire — am I covered?")
+and get an answer grounded in the actual policy clauses, with the reasoning path drawn live on a graph.
 
-## วิธีรัน
+![Node.js](https://img.shields.io/badge/Node.js-22.9%2B-339933?logo=nodedotjs&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![Claude API](https://img.shields.io/badge/LLM-Claude%20API-D97757)
+![Cytoscape.js](https://img.shields.io/badge/graph-Cytoscape.js-F7A71B)
+
+<p align="center">
+  <img src="docs/images/graph-answer.png" alt="A question about an EV fire traced through the knowledge graph, with a cited answer" width="100%">
+</p>
+
+---
+
+## Contents
+
+- [Features](#features)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [How it works](#how-it-works)
+- [Project structure](#project-structure)
+- [Data pipeline](#data-pipeline)
+- [Answer feedback](#answer-feedback)
+- [Limitations](#limitations)
+- [Disclaimer](#disclaimer)
+
+## Features
+
+- **Coverage matrix:** 11 plans × 8 coverage topics at a glance. Click any cell to see the conditions and the exact clauses it rests on.
+- **Live knowledge graph:** each question lights up the path it took (vehicle → plan → coverage → conditions → clause), built with Cytoscape.js.
+- **Grounded AI chat:** Claude answers by calling tools that query the graph and the policy text, and every claim carries a clause citation.
+- **Hybrid retrieval:** a hand-reviewed coverage graph combined with BM25 full-text search over 901 clause chunks.
+- **Question router:** detects plans, coverage topics, events, the vehicle model (and whether it is an EV), question type, and out-of-scope questions, before any LLM call.
+- **Works without an API key:** the matrix, the graph and the preset example questions all run offline. Only free-text chat needs Claude.
+- **Chat UX:** history kept in the browser, search (`Ctrl+K`), new chat (`Ctrl+Shift+O`), pin, rename, edit-and-resend, and mobile layout.
+- **Feedback loop:** 👍/👎 on every answer, logged by the server and turned into regression test candidates.
+
+<p align="center">
+  <img src="docs/images/coverage-matrix.png" alt="Coverage matrix: plans by coverage topic" width="100%">
+</p>
+
+## Quick start
+
+**Requirements:** Node.js 22.9+ (uses `--env-file-if-exists`). An [Anthropic API key](https://console.anthropic.com/) is optional and only needed for free-text chat.
 
 ```bash
+git clone https://github.com/Nothingtaro/graphrag-insurance-map.git
+cd graphrag-insurance-map
 npm install
-cp .env.example .env      # แล้วใส่ ANTHROPIC_API_KEY
-npm start                 # เปิด http://localhost:5173
+cp .env.example .env      # then set ANTHROPIC_API_KEY
+npm start                 # http://localhost:5173
 ```
 
-ถ้าไม่ใส่ key กราฟและปุ่มคำถามตัวอย่างยังใช้ได้ทั้งหมด (คำตอบตั้งไว้ล่วงหน้า ไม่ใช้ LLM) แต่ช่องพิมพ์ถาม AI จะตอบเป็น error
+The built graph (`public/js/data.js`) is committed, so Python is **not** needed to run the app.
 
-## โครงสร้าง
+## Configuration
+
+All settings are environment variables, read from `.env`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | none | Needed for chat. It stays on the server and is never sent to the browser. |
+| `GRAPHRAG_MODEL` | `claude-sonnet-5-5` | Claude model used for chat |
+| `GRAPHRAG_EFFORT` | `medium` | Reasoning effort |
+| `PORT` | `5173` | Server port (binds to `127.0.0.1`) |
+| `GRAPHRAG_FEEDBACK_LOG` | `feedback/feedback.jsonl` | Where answer feedback is appended |
+
+Server-side refusal fallback (`fallbacks: "default"`) is enabled: if the model refuses, the request is retried on a fallback model within the same call.
+
+## How it works
 
 ```
-server.mjs                        Node server: เสิร์ฟ public/, proxy POST /api/messages ไป Claude API (streaming), รับ POST /api/feedback
-public/index.html                 markup ของหน้า
-public/css/style.css              สไตล์ของแอป
-public/css/fonts.css + fonts/     IBM Plex Sans Thai, Sarabun (แยกออกจาก base64 ที่ฝังไว้เดิม)
-public/vendor/cytoscape-3.35.0.min.js   Cytoscape.js (ไม่ได้แก้)
-public/js/data.js                 const DATA = {...} กราฟ + ข้อในกรมธรรม์ (สร้างโดย ingest/build_data.py ห้ามแก้มือ)
-public/js/app.js                  ตัวแอป: วาดกราฟ, BM25, retrieval, tools, แชท
-public/js/route.js                ตัวแยกคำถาม: แผน ความคุ้มครอง เรื่องทั่วไป รุ่นรถ (EV หรือไม่) เหตุการณ์ ปัจจัย ชนิดคำถาม คำถามนอกขอบเขต (ไม่มี DOM ทดสอบนอกเบราว์เซอร์ได้)
-public/js/claude-local.js         ตัวแทน window.claude.use('sample') ของ claude.ai
+ question ──► route.js ──────────► plans, coverages, vehicle (EV?), event, question type, in/out of scope
+                │
+                ▼
+          app.js (browser)
+          ├─ graph lookup ──────► data.js: plans → coverages → conditions / exclusions → clauses
+          ├─ BM25 search ───────► 901 clause chunks
+          └─ tool loop ◄──────► claude-local.js ──► server.mjs ──► Claude API (streaming)
+                │
+                ▼
+     cited answer  +  highlighted path on the graph
 ```
 
-## สิ่งที่เปลี่ยนจาก artifact
+The tool loop runs **in the browser** because each tool call also moves the graph on screen.
+`server.mjs` is a thin streaming proxy to the Claude API that keeps the key server-side. The tools are:
 
-- บน claude.ai ช่องแชทเรียก Claude ผ่าน `window.claude.use('sample')` ซึ่งมีเฉพาะใน artifact runtime
-  ตอนนี้ `claude-local.js` ทำ interface เดียวกัน (`sample(messages, { signal, onText, tools })` → `{ text }`)
-  โดยส่งแต่ละ turn ไปที่ `server.mjs` ซึ่งเรียก Claude API ด้วย `@anthropic-ai/sdk`
-- tool loop (search_chunks, get_coverage, compare_plans ฯลฯ) ยังรันในหน้าเว็บเหมือนเดิม เพราะ tools ไปขยับกราฟบนจอ
-- UI ปรับตามแนวทาง [Impeccable](https://impeccable.style/) ให้พร้อมนำเสนอ: หน้าแรกเป็นตารางความคุ้มครอง (แผน × เรื่อง)
-  คลิกช่องเพื่อดูเงื่อนไขและข้อที่อ้างอิง, แผนที่ความรู้ (กราฟ) เปิดเองเมื่อถามคำถาม, โหนดความคุ้มครองใช้สีตามสถานะ,
-  คำอธิบายสัญลักษณ์พับเก็บได้, รองรับมือถือ ส่วน logic การค้น ตัว tools และ prompt ยังเหมือน artifact
-- ค่าเริ่มต้น: model `claude-sonnet-5-5`, effort `medium` (เปลี่ยนได้ใน `.env` ผ่าน `GRAPHRAG_MODEL`, `GRAPHRAG_EFFORT`) และเปิด server-side refusal fallback
-  (`fallbacks: "default"`) ไว้ ถ้าโมเดลปฏิเสธ คำขอจะถูกรันซ้ำบนโมเดลสำรองในคำขอเดียวกัน
+| Tool | Purpose |
+|---|---|
+| `search_chunks` / `search_terms` | Full-text search over clauses and defined terms |
+| `get_coverage` | Coverage status and conditions for a plan × topic |
+| `get_plan_overview` | Everything one plan covers |
+| `compare_plans` | Side-by-side comparison of plans |
+| `get_clause` | The exact text of a cited clause |
+| `get_policy_terms` | General policy terms (no-claim discount, cancellation and refund, vehicle transfer, claim notice, …) |
 
-## แชท: ประวัติและ feedback
+## Project structure
 
-- **ประวัติแชท** เก็บในเบราว์เซอร์ (localStorage) ค้นหาได้ด้วย Ctrl+K เปิดแชทใหม่ด้วย Ctrl+Shift+O และปักหมุด เปลี่ยนชื่อ หรือลบได้จากเมนู ⋯ ของแต่ละแชท
-  ในโหมดแชทเต็มจอ ประวัติเป็นแถบด้านซ้ายที่พับเหลือแถบไอคอนได้ บนจอเล็กเป็นแผ่นเลื่อนจากซ้าย
-- **แก้คำถาม:** กดไอคอนดินสอใต้คำถามของเรา แล้วถามใหม่จากจุดนั้น คำตอบเดิมที่ตามมาจะถูกตัดออก
-- **Feedback:** 👍/👎 ใต้ทุกคำตอบ กด 👎 แล้วเลือกเหตุผลและพิมพ์ความเห็นได้ (ไม่บังคับ)
-  server เขียนต่อท้ายใน `feedback/feedback.jsonl` บรรทัดละหนึ่งครั้งที่กด (เปลี่ยนใจก็เป็นบรรทัดใหม่ fb_id เดิม)
-  แต่ละบรรทัดเก็บคำถาม คำตอบ ข้อที่อ้าง ผลของตัวแยกคำถาม และรุ่นข้อมูล ไม่เก็บชื่อผู้กด
-  ถ้าส่งไม่ได้ เบราว์เซอร์จะเก็บไว้แล้วส่งใหม่เอง
-  ย้ายที่เก็บได้ด้วย `GRAPHRAG_FEEDBACK_LOG=/path/to/file.jsonl`
+```
+server.mjs                   Node server: serves public/, proxies POST /api/messages, logs POST /api/feedback
+public/
+  index.html                 Page markup
+  css/                       App styles and fonts (IBM Plex Sans Thai, Sarabun)
+  vendor/                    Cytoscape.js 3.35.0 (unmodified)
+  js/data.js                 Graph + policy clauses: GENERATED by ingest/build_data.py, do not edit
+  js/app.js                  App: graph rendering, BM25, retrieval, tools, chat
+  js/route.js                Question router (DOM-free, testable in Node)
+  js/claude-local.js         Browser client for server.mjs
+ingest/                      PDF → data.js pipeline, tests and eval set (see ingest/README.md)
+doc/                         Source policy wordings (PDF)
+research/b19_review/         Review page for interpretive readings (for the claims team)
+```
+
+## Data pipeline
+
+The graph is built from the policy PDFs in `doc/` by a Python pipeline in [`ingest/`](ingest/README.md):
+
+1. **Extract:** read the PDFs with PyMuPDF and repair broken Thai glyphs (duplicated tone marks, stray glyphs, zero-width spacing), recover tables, and measure quality. Dictionary coverage of the 2025 edition goes from ~76% to ~99.6%.
+2. **Structure:** split pages into sections, clauses and chunks.
+3. **Build:** merge them with the hand-reviewed coverage graph (`ingest/graph.py`, `ingest/graph_ext.py`), check every reference, and write `public/js/data.js`.
 
 ```bash
-node ingest/feedback_report.mjs             # สรุป → ingest/out/feedback.md
-node ingest/feedback_report.mjs --to-eval   # ร่างข้อสอบจาก 👎 → ingest/eval/candidates.json (ตรวจแล้วย้ายเข้า questions.json เอง)
+pip install -r ingest/requirements.txt            # pymupdf, pythainlp
+python -I ingest/extract.py                       # PDF → ingest/out/pages/*.json
+python -I ingest/build_data.py                    # → public/js/data.js
+python -I -m unittest discover -s ingest/tests -v # unit tests
+node ingest/eval_route.mjs --strict               # router + BM25 eval set, fails on regression
 ```
 
-## Pipeline นำเข้าข้อมูล (`ingest/`)
+`ingest/out/` is generated and not committed.
 
-`build_data.py` ตัวเดิมไม่ได้อยู่ใน artifact จึงเขียนใหม่ใน [ingest/](ingest/README.md):
-ระยะ 1 (เสร็จแล้ว) อ่าน PDF ใน `doc/` ซ่อมอักษรไทยที่เพี้ยน ดึงตาราง และวัดคุณภาพ
-ระยะ 2 (เสร็จแล้ว) แยกหมวด/ข้อ ตัด chunk ผูกกราฟที่ตรวจด้วยมือ (`ingest/graph.py`) และเขียน `public/js/data.js`
+**Current dataset:** 10 documents · 901 chunks · 11 plans (Type 1, 2+, 3+, 2, 3, 4, 4 Protection, EV Type 1–3, and Compulsory Motor Insurance) × 8 coverage topics · 213 condition/exclusion/deductible/entitlement nodes · 10 general policy terms.
+Wordings are the 1 January 2025 edition, except Type 4, Type 4 Protection and Compulsory Motor Insurance, which are still the 2020 edition.
+
+## Answer feedback
+
+Every answer has 👍/👎, and 👎 can add a reason and comment. The server appends one JSON line per rating to `feedback/feedback.jsonl`, holding the question, answer, cited clauses, router output and data version. It does not store user identity. Ratings that fail to send are queued in the browser and retried.
 
 ```bash
-pip install -r ingest/requirements.txt
-python -I ingest/extract.py && python -I ingest/build_data.py
-node ingest/eval_route.mjs          # ชุดทดสอบ E1 → ingest/out/eval.md (--strict ไว้กัน regression)
+node ingest/feedback_report.mjs             # summary → ingest/out/feedback.md
+node ingest/feedback_report.mjs --to-eval   # draft eval cases from 👎 → ingest/eval/candidates.json
 ```
 
-`ingest/out/` ไม่ได้อยู่ใน repo เพราะสร้างใหม่ได้จาก `doc/*.pdf` ด้วย `extract.py` (ต้องรันก่อน `build_data.py`)
-ส่วน `public/js/data.js` อยู่ใน repo แล้ว จึงรันแอปได้เลยโดยไม่ต้องมี Python
+## Limitations
 
-ข้อมูลชุดปัจจุบัน: 10 เอกสาร 901 chunk, 11 แผน (ประเภท 1, 2+, 3+, 2, 3, 4, 4 ป้องกันภัย, EV ประเภท 1–3 และ พ.ร.บ.) × 8 เรื่องความคุ้มครอง,
-213 node เงื่อนไข/ข้อยกเว้น/ส่วนแรก/สิทธิที่ได้รับ และเงื่อนไขทั่วไปของกรมธรรม์ 10 เรื่อง (ส่วนลดประวัติดี การยกเลิกและคืนเบี้ย
-การโอนรถ การแจ้งเคลม ฯลฯ) เงื่อนไขฉบับ 1 มกราคม 2568 ยกเว้นประเภท 4 ที่ยังเป็นฉบับ 2563
+- **Older editions:** Type 4, Type 4 Protection and Compulsory Motor Insurance use the 2020 wordings, because no newer edition is in `doc/`.
+- **Out of scope:** other insurance types, premium prices and choosing an insurer get a standard reply; that data is not in the system.
+- **Off-topic questions:** questions unrelated to insurance or cars do not touch the graph. Mid-conversation follow-ups ("explain more") are answered from the chat context.
+- **Schedule amounts:** sums insured and deductibles "as stated in the schedule" vary per policy and are not in the data.
+- **Interpretive readings:** 42 graph edges are interpretations, not literal wording (e.g. flood under Type 1). 35 are provisionally accepted ([`ingest/interp_review.py`](ingest/interp_review.py)) and still awaiting claims-team confirmation ([`research/b19_review/`](research/b19_review/README.md)).
 
-ในแอป เงื่อนไขทั่วไปแสดงเป็นการ์ดใต้ตารางความคุ้มครอง ในหน้ารายละเอียดของแผน และในแผนที่ความรู้ (แผน → เรื่อง → ข้อในกรมธรรม์)
-ส่วนแชทเรียกผ่านเครื่องมือ `get_policy_terms` หรือดึงให้เองเมื่อคำถามพูดถึงเรื่องเหล่านี้
+## Disclaimer
 
-## ข้อจำกัด
-
-- ประเภท 4, ประเภท 4 ป้องกันภัย และ พ.ร.บ. ยังเป็นเงื่อนไขฉบับ 2563 (ไม่มีฉบับใหม่กว่าใน `doc/`)
-- คำถามนอกขอบเขต (ประกันประเภทอื่น ราคาเบี้ย ให้เลือกบริษัท) ตอบด้วยข้อความมาตรฐาน ไม่มีข้อมูลเหล่านี้ในระบบ
-- คำถามที่ไม่เกี่ยวกับประกันหรือรถเลย ไม่ขยับกราฟ ถ้าเป็นข้อความแรกของแชท ตอบด้วยข้อความมาตรฐาน
-  ถ้าอยู่กลางบทสนทนา (อาจเป็น "อธิบายเพิ่มหน่อย") AI ตอบจากบทสนทนาก่อนหน้าโดยไม่ค้นใหม่
-- วงเงินและค่าเสียหายส่วนแรกที่ "ระบุไว้ในตาราง" ของแต่ละกรมธรรม์ยังไม่มีในข้อมูล
-- กราฟตรวจเทียบข้อความแล้ว จุดที่เป็นการตีความ 42 จุด (เช่น น้ำท่วมในประเภท 1) เจ้าของโปรเจกต์ยอมรับชั่วคราว 35 จุด ([ingest/interp_review.py](ingest/interp_review.py))
-  แชทจึงตอบตรง ๆ ทั้งที่ฝ่ายสินไหมยังไม่ได้ยืนยัน ดูสถานะการตรวจที่ [research/b19_review/](research/b19_review/README.md)
+This is an independent research project. It is **not** insurance or legal advice and is not affiliated with any insurer.
+Always check the policy wording and schedule of your own policy. The policy documents in `doc/` belong to their respective publishers.
