@@ -1,0 +1,19 @@
+# deps / secrets / caches
+node_modules/
+.env
+__pycache__/
+*.pyc
+
+# scratch, research, presentation (keep only the B19 review page generator)
+presentation/
+research/*
+!research/b19_review/
+PLAN.md
+kg/
+doc/external/
+ingest/fetch_sources.py
+
+# generated / runtime data
+ingest/out/
+ingest/eval/candidates.json
+feedback/

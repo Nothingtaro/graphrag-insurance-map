@@ -1,0 +1,274 @@
+<title>ตรวจการตีความเงื่อนไข</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=Sarabun:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of review cards; a sticky bar carries progress and filters; policy wording sits in quiet document blocks */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --ink: #1b2330; --muted: #5d6878; --line: #dfe3ea; --quote: #f1f3f6;
+  --accent: #2c4f86; --accent-ink: #ffffff; --accent-soft: #e6edf8;
+  --ok: #1f7a4d; --ok-soft: #e3f3ea; --bad: #b4382f; --bad-soft: #fbe8e6; --warn: #8a5a00; --warn-soft: #fbf0d9;
+  --ui: "IBM Plex Sans Thai", "Noto Sans Thai", Tahoma, system-ui, sans-serif;
+  --doc: "Sarabun", "TH Sarabun New", "Noto Serif Thai", Tahoma, serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161d; --surface: #1a2029; --ink: #e7ebf1; --muted: #9aa5b5; --line: #2c3442; --quote: #151a22;
+  --accent: #8fb0e8; --accent-ink: #0f1622; --accent-soft: #23314a;
+  --ok: #6fcf9a; --ok-soft: #173326; --bad: #f0877d; --bad-soft: #3a1d1b; --warn: #e6b65a; --warn-soft: #36290f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161d; --surface: #1a2029; --ink: #e7ebf1; --muted: #9aa5b5; --line: #2c3442; --quote: #151a22;
+  --accent: #8fb0e8; --accent-ink: #0f1622; --accent-soft: #23314a;
+  --ok: #6fcf9a; --ok-soft: #173326; --bad: #f0877d; --bad-soft: #3a1d1b; --warn: #e6b65a; --warn-soft: #36290f; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.65 var(--ui); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+.wrap { max-width: 860px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { padding-block: 32px 20px; display: grid; gap: 10px; }
+header.top > *, .card > *, .meta > * { min-width: 0; overflow-wrap: anywhere; }
+.eyebrow { font-size: 12.5px; letter-spacing: .04em; color: var(--muted); }
+h1 { margin: 0; font-size: 28px; line-height: 1.3; font-weight: 600; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 64ch; }
+.how { margin: 4px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); display: grid; gap: 4px; font-size: 14px; }
+.how b { font-weight: 600; }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+.bar .wrap { padding-block: 10px; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.progress { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress b { color: var(--ink); font-weight: 600; }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.filters button { font: inherit; font-size: 13px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.notice { margin: 14px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--warn-soft); color: var(--ink); font-size: 14px; }
+main.wrap { padding-block: 18px 64px; display: grid; gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 16px; display: grid; gap: 12px; min-width: 0; }
+.card.pri { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.tag { padding: 1px 9px; border-radius: 999px; background: var(--quote); border: 1px solid var(--line); color: var(--muted); }
+.tag.pri { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 500; }
+.tag.keep { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+.card h2 { margin: 0; font-size: 18px; line-height: 1.4; font-weight: 600; text-wrap: balance; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+@media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
+.cols > div { min-width: 0; }
+.lab { font-size: 12.5px; color: var(--muted); letter-spacing: .02em; margin-bottom: 2px; }
+.cols p { margin: 0; }
+.keepnote { margin: 0; font-size: 13.5px; color: var(--warn); }
+details.clauses { border-top: 1px solid var(--line); padding-top: 10px; }
+details.clauses summary { cursor: pointer; font-size: 13.5px; color: var(--accent); width: fit-content; }
+details.clauses summary:focus-visible, .filters button:focus-visible, .seg button:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cl { margin-top: 10px; display: grid; gap: 10px; }
+.cl figure { margin: 0; background: var(--quote); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.cl figcaption { font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.cl blockquote { margin: 0; font: 15px/1.7 var(--doc); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 16em; overflow: auto; }
+.more { font-size: 12.5px; color: var(--muted); }
+.answer { border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 10px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { font: inherit; font-size: 14px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.seg button:disabled { cursor: not-allowed; opacity: .55; }
+.seg button[data-v="ok"][aria-pressed="true"] { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); font-weight: 600; }
+.seg button[data-v="wrong"][aria-pressed="true"] { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); font-weight: 600; }
+.seg button[data-v="unsure"][aria-pressed="true"] { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); font-weight: 600; }
+textarea { width: 100%; min-height: 64px; resize: vertical; font: 14px/1.6 var(--ui); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+textarea:disabled { opacity: .6; }
+.team { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.team .n { font-variant-numeric: tabular-nums; }
+.team .ok { color: var(--ok); } .team .wrong { color: var(--bad); } .team .unsure { color: var(--warn); }
+.empty { padding: 32px 0; text-align: center; color: var(--muted); }
+footer.wrap { padding-block: 0 40px; font-size: 12.5px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<header class="top wrap">
+  <div class="eyebrow">B19 · แผนที่ความรู้ความคุ้มครองประกันรถยนต์ · ข้อมูลวันที่ __BUILT__</div>
+  <h1>ตรวจการตีความเงื่อนไขกรมธรรม์</h1>
+  <p class="lede">ระบบถาม-ตอบความคุ้มครองตอบคำถามเหล่านี้จากการอ่านเล่มเงื่อนไข ซึ่งเล่มไม่ได้เขียนไว้ตรง ๆ ขอให้ฝ่ายสินไหมดูทีละข้อว่าคำตอบของระบบตรงกับแนวปฏิบัติหรือไม่</p>
+  <div class="how">
+    <div><b>ถูก ใช้ตอบได้</b> คำตอบของระบบตรงกับที่ฝ่ายสินไหมตอบลูกค้า</div>
+    <div><b>ไม่ถูก</b> พิมพ์คำตอบที่ถูกต้องในช่องด้านล่าง ระบบจะถูกแก้ตามนั้น</div>
+    <div><b>ไม่แน่ใจ</b> ต้องถามผู้รู้เพิ่ม หรือขึ้นกับข้อเท็จจริงของแต่ละเคส (เขียนเงื่อนไขไว้ในช่องได้)</div>
+  </div>
+  <p class="notice" id="notice" hidden></p>
+</header>
+
+<div class="bar">
+  <div class="wrap">
+    <div class="progress" id="progress"><span>คุณตอบแล้ว <b id="pMine">0</b> / <b id="pTotal">0</b></span><span>มีคนตอบแล้ว <b id="pTeam">0</b> ข้อ</span><span id="pSave"></span></div>
+    <div class="filters" role="group" aria-label="กรองรายการ">
+      <button type="button" data-f="all" aria-pressed="true">ทั้งหมด</button>
+      <button type="button" data-f="pri" aria-pressed="false">ควรตรวจก่อน</button>
+      <button type="button" data-f="todo" aria-pressed="false">ยังไม่ได้ตอบ</button>
+      <button type="button" data-f="wrong" aria-pressed="false">มีคนว่าไม่ถูก</button>
+      <button type="button" data-f="keep" aria-pressed="false">ระบบยังเตือน</button>
+    </div>
+  </div>
+</div>
+
+<main class="wrap" id="list" aria-live="polite"></main>
+<footer class="wrap">คำตอบของแต่ละคนบันทึกแยกกัน ทุกคนเห็นคำตอบของทีม แต่แก้ได้เฉพาะของตัวเอง</footer>
+
+<script type="application/json" id="items">__ITEMS__</script>
+<script>
+(() => {
+  const ITEMS = JSON.parse(document.getElementById('items').textContent);
+  const VERDICT = { ok: 'ถูก ใช้ตอบได้', wrong: 'ไม่ถูก', unsure: 'ไม่แน่ใจ' };
+  const STATUS = { accepted: 'ระบบใช้ตอบอยู่ (ยอมรับชั่วคราว)', keep: 'ระบบยังเตือนให้ยืนยัน', confirmed: 'ยืนยันแล้ว' };
+  const $ = (s, r = document) => r.querySelector(s);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+  let db = null, user = null, uid = null, writable = false, loaded = false;
+  let mine = {}, team = {}, names = {}, filter = 'all';
+  const cards = new Map();
+
+  function notice(text) { const n = $('#notice'); n.textContent = text || ''; n.hidden = !text; }
+
+  // ---------- cards (built once; later updates touch only their own parts) ----------
+  function buildCard(it) {
+    const c = el('article', 'card' + (it.priority ? ' pri' : ''));
+    c.id = 'item-' + it.id;
+    const meta = el('div', 'meta');
+    if (it.priority) meta.append(el('span', 'tag pri', 'ควรตรวจก่อน'));
+    meta.append(el('span', 'tag', it.group));
+    meta.append(el('span', 'tag' + (it.status === 'keep' ? ' keep' : ''), STATUS[it.status] || it.status));
+    meta.append(el('span', 'code', it.id));
+    c.append(meta, el('h2', null, it.name));
+
+    const cols = el('div', 'cols');
+    const a = el('div'); a.append(el('div', 'lab', 'ระบบตอบว่า'), el('p', null, it.answer));
+    const b = el('div'); b.append(el('div', 'lab', 'ทำไมเป็นการตีความ'), el('p', null, it.why));
+    if (it.note) b.append(el('p', 'keepnote', 'ระบบยังเตือนเพราะ: ' + it.note));
+    cols.append(a, b); c.append(cols);
+
+    if (it.clauses.length) {
+      const d = el('details', 'clauses');
+      d.append(el('summary', null, 'ถ้อยคำในเล่มที่เกี่ยวข้อง (' + it.clauses.length + ' ข้อ)'));
+      const box = el('div', 'cl');
+      it.clauses.forEach(k => {
+        const f = el('figure'); f.append(el('figcaption', null, k.doc + ' · ' + k.ref), el('blockquote', null, k.text)); box.append(f);
+      });
+      if (it.more) box.append(el('div', 'more', 'และอีก ' + it.more + ' ข้อที่ใช้ถ้อยคำเดียวกันในแผนอื่น'));
+      d.append(box); c.append(d);
+    }
+
+    const ans = el('div', 'answer');
+    const seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'ความเห็นของคุณต่อ ' + it.name);
+    Object.entries(VERDICT).forEach(([v, label]) => {
+      const btn = el('button', null, label); btn.type = 'button'; btn.dataset.v = v; btn.setAttribute('aria-pressed', 'false');
+      btn.addEventListener('click', () => choose(it.id, v)); seg.append(btn);
+    });
+    const ta = el('textarea'); ta.id = 'fix-' + it.id; ta.setAttribute('aria-label', 'คำตอบที่ถูกต้องหรือหมายเหตุ สำหรับ ' + it.name);
+    ta.placeholder = 'ถ้าไม่ถูก: คำตอบที่ถูกต้องคืออะไร · ถ้าไม่แน่ใจ: ขึ้นกับอะไร (ไม่บังคับ)';
+    ta.addEventListener('input', () => { (mine[it.id] = mine[it.id] || {}).fix = ta.value; queueSave(800); });
+    const tm = el('div', 'team');
+    ans.append(seg, ta, tm); c.append(ans);
+    cards.set(it.id, { c, seg, ta, tm });
+    return c;
+  }
+
+  function paintMine(id) {
+    const k = cards.get(id), m = mine[id] || {};
+    k.seg.querySelectorAll('button').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.v === m.v)); b.disabled = !writable; });
+    if (document.activeElement !== k.ta) k.ta.value = m.fix || '';
+    k.ta.disabled = !writable;
+  }
+  function verdictsFor(id) {
+    const out = { ok: [], wrong: [], unsure: [] };
+    Object.entries(team).forEach(([who, answers]) => { const v = answers && answers[id] && answers[id].v; if (out[v]) out[v].push(who); });
+    return out;
+  }
+  async function paintTeam() {
+    const ids = Object.keys(team);
+    if (user && ids.length) { try { names = await user.profiles(ids); } catch (e) { /* names stay unresolved */ } }
+    cards.forEach((k, id) => {
+      const v = verdictsFor(id); k.tm.replaceChildren();
+      const total = v.ok.length + v.wrong.length + v.unsure.length;
+      if (!total) { k.tm.append(el('span', null, loaded ? 'ยังไม่มีใครในทีมตอบข้อนี้' : '')); return; }
+      Object.keys(VERDICT).forEach(key => {
+        if (!v[key].length) return;
+        const who = v[key].map(x => x === uid ? 'คุณ' : ((names[x] && names[x].name) || 'อีกคน')).join(', ');
+        const s = el('span', key); s.append(el('span', 'n', VERDICT[key] + ' ' + v[key].length)); s.append(document.createTextNode(' (' + who + ')'));
+        k.tm.append(s);
+      });
+    });
+    paintProgress(); applyFilter();
+  }
+  function paintProgress() {
+    $('#pTotal').textContent = ITEMS.length;
+    $('#pMine').textContent = ITEMS.filter(it => mine[it.id] && mine[it.id].v).length;
+    $('#pTeam').textContent = ITEMS.filter(it => Object.values(team).some(a => a && a[it.id] && a[it.id].v)).length;
+  }
+  function applyFilter() {
+    let shown = 0;
+    ITEMS.forEach(it => {
+      const k = cards.get(it.id), v = verdictsFor(it.id);
+      const show = filter === 'all' || (filter === 'pri' && it.priority) || (filter === 'todo' && !(mine[it.id] && mine[it.id].v))
+        || (filter === 'wrong' && v.wrong.length > 0) || (filter === 'keep' && it.status === 'keep');
+      k.c.hidden = !show; if (show) shown++;
+    });
+    $('#empty').hidden = shown > 0;
+  }
+
+  // ---------- saving: one document per person, one write at a time ----------
+  let timer = null, writing = false, again = false;
+  function choose(id, v) {
+    if (!writable) return;
+    const m = mine[id] = mine[id] || {};
+    m.v = m.v === v ? undefined : v;
+    if (!m.v) delete m.v;
+    paintMine(id); queueSave(0);
+  }
+  function queueSave(delay) { clearTimeout(timer); $('#pSave').textContent = 'กำลังบันทึก…'; timer = setTimeout(save, delay); }
+  async function save() {
+    if (!db || !uid || !writable) return;
+    if (writing) { again = true; return; }
+    writing = true;
+    try {
+      do {
+        again = false;
+        const answers = {};
+        Object.entries(mine).forEach(([id, m]) => { if (m.v || (m.fix && m.fix.trim())) answers[id] = { v: m.v || null, fix: (m.fix || '').trim(), at: new Date().toISOString() }; });
+        await db.doc('reviews/' + uid).set({ answers });
+      } while (again);
+      $('#pSave').textContent = 'บันทึกแล้ว';
+    } catch (e) {
+      if (e && e.code === 'invalid_argument') { writable = false; ITEMS.forEach(it => paintMine(it.id)); notice('บัญชีนี้มีสิทธิ์แค่ดู บันทึกคำตอบไม่ได้ ขอให้เจ้าของหน้าเพิ่มสิทธิ์เป็น Contributor'); }
+      else if (e && e.code === 'quota_exceeded') notice('ที่เก็บข้อมูลของหน้านี้เต็ม แจ้งเจ้าของหน้า');
+      else notice('บันทึกไม่สำเร็จ ลองเลือกคำตอบอีกครั้ง');
+      $('#pSave').textContent = '';
+    } finally { writing = false; }
+  }
+
+  // ---------- start: render the list at once, then connect ----------
+  const list = $('#list');
+  ITEMS.forEach(it => list.append(buildCard(it)));
+  const empty = el('p', 'empty', 'ไม่มีรายการในตัวกรองนี้'); empty.id = 'empty'; empty.hidden = true; list.append(empty);
+  ITEMS.forEach(it => paintMine(it.id)); paintProgress();
+  document.querySelectorAll('.filters button').forEach(b => b.addEventListener('click', () => {
+    filter = b.dataset.f; document.querySelectorAll('.filters button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); applyFilter();
+  }));
+
+  const use = n => (window.claude && window.claude.use) ? window.claude.use(n) : Promise.resolve(null);
+  (async () => {
+    [db, user] = await Promise.all([use('db'), use('user')]);
+    if (!db) { notice('หน้านี้บันทึกคำตอบได้เมื่อเปิดใน claude.ai และลงชื่อเข้าใช้ ตอนนี้อ่านได้อย่างเดียว'); return; }
+    uid = user ? await user.id() : null;
+    const can = user ? await user.can('data.write') : null;
+    writable = !!uid && can !== false;
+    if (!uid) notice('ลงชื่อเข้าใช้ claude.ai เพื่อบันทึกคำตอบของคุณ ตอนนี้อ่านได้อย่างเดียว');
+    else if (can === false) notice('บัญชีนี้มีสิทธิ์แค่ดู บันทึกคำตอบไม่ได้ ขอให้เจ้าของหน้าเพิ่มสิทธิ์เป็น Contributor');
+    ITEMS.forEach(it => paintMine(it.id));
+    const slow = setTimeout(() => { if (!loaded) notice('ยังโหลดคำตอบของทีมไม่ได้ ข้อมูลที่เห็นอาจยังไม่ครบ'); }, 10000);
+    let first = true;
+    db.collection('reviews').onSnapshot(snap => {
+      const next = {};
+      snap.docs.forEach(d => { const body = d.data(); next[d.id] = (body && body.answers) || {}; });
+      team = next;
+      if (!snap.metadata.fromCache) { loaded = true; clearTimeout(slow); if ($('#notice').textContent.startsWith('ยังโหลด')) notice(''); }
+      // take my own saved answers once, before I start editing
+      if (first && uid && team[uid]) { mine = JSON.parse(JSON.stringify(team[uid])); ITEMS.forEach(it => paintMine(it.id)); }
+      first = false;
+      paintTeam();
+    }, () => { clearTimeout(slow); loaded = true; notice('เชื่อมต่อที่เก็บคำตอบไม่ได้ ลองเปิดหน้านี้ใหม่ภายหลัง'); });
+  })();
+})();
+</script>

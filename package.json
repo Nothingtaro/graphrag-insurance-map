@@ -1,0 +1,14 @@
+{
+  "name": "graphrag-insurance-map",
+  "version": "0.1.0",
+  "description": "แผนที่ความรู้ความคุ้มครองประกันรถยนต์ (GraphRAG) — ported from a Claude artifact",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.mjs"
+  },
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0"
+  },
+  "private": true
+}

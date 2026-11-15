@@ -1,0 +1,15 @@
+{
+  "source_dir": "doc",
+  "documents": [
+    { "id": "std-t1-2568", "key": "T1", "prefix": "t1", "file": "AdditonalCoverageType1TH.pdf", "product": "standard", "policy_type": "1", "title": "เงื่อนไขประเภท 1" },
+    { "id": "std-t2-2568", "key": "T2", "prefix": "t2", "file": "AdditonalCoverageType2TH.pdf", "product": "standard", "policy_type": "2", "title": "เงื่อนไขประเภท 2" },
+    { "id": "std-t3-2568", "key": "T3", "prefix": "t3", "file": "AdditonalCoverageType3TH.pdf", "product": "standard", "policy_type": "3", "title": "เงื่อนไขประเภท 3" },
+    { "id": "std-t5-2568", "key": "T5", "prefix": "t5", "file": "AdditonalCoverageType5TH.pdf", "product": "standard", "policy_type": "5", "title": "เงื่อนไขประเภท 5 (2+ และ 3+)" },
+    { "id": "std-t4-2563", "key": "T4", "prefix": "t4", "file": "Type4_AdditonalCoverage-AUG_2020.pdf", "product": "standard", "policy_type": "4", "title": "เงื่อนไขประเภท 4" },
+    { "id": "std-t4sg-2563", "key": "T4SG", "prefix": "t4sg", "file": "Type4SG_AdditonalCoverage-AUG_2020.pdf", "product": "standard", "policy_type": "4", "title": "เงื่อนไขประกันภัยรถยนต์ป้องกันภัย (ประเภท 4)" },
+    { "id": "ev-t1-2568", "key": "EV1", "prefix": "ev1", "file": "AdditonalCoverageEVType1.pdf", "product": "ev", "policy_type": "1", "title": "เงื่อนไขรถยนต์ไฟฟ้า ประเภท 1" },
+    { "id": "ev-t2-2568", "key": "EV2", "prefix": "ev2", "file": "AdditonalCoverageEVType2.pdf", "product": "ev", "policy_type": "2", "title": "เงื่อนไขรถยนต์ไฟฟ้า ประเภท 2" },
+    { "id": "ev-t3-2568", "key": "EV3", "prefix": "ev3", "file": "AdditonalCoverageEVType3.pdf", "product": "ev", "policy_type": "3", "title": "เงื่อนไขรถยนต์ไฟฟ้า ประเภท 3" },
+    { "id": "cmi-2563", "key": "CMI", "prefix": "cmi", "file": "Compulsory_Motor_Insurance-AUG_2020.pdf", "product": "compulsory", "policy_type": "พ.ร.บ.", "title": "เงื่อนไขกรมธรรม์ประกันภัยคุ้มครองผู้ประสบภัยจากรถ (พ.ร.บ.)" }
+  ]
+}
