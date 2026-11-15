@@ -1,124 +1,138 @@
-# ingest: PDF เงื่อนไขกรมธรรม์ → `public/js/data.js`
+# ingest: policy PDFs → `public/js/data.js`
 
-ระยะ 1: อ่าน PDF ใน `doc/` ซ่อมตัวอักษรไทยที่เพี้ยน ดึงตาราง และวัดคุณภาพ
-ระยะ 2: แยกหมวด/ข้อ ตัด chunk ผูกกราฟความคุ้มครองที่ตรวจด้วยมือ แล้วเขียน `public/js/data.js`
+The data pipeline behind the app. It turns the policy wordings in [`doc/`](../doc) into the knowledge graph and clause index that the web app loads.
 
-## วิธีรัน
+| Phase | What it does |
+|---|---|
+| **1. Extract** | Read the PDFs, repair corrupted Thai text, recover tables, and measure quality |
+| **2. Build** | Split pages into sections, clauses and chunks, attach the hand-reviewed coverage graph, and write `public/js/data.js` |
+
+## Usage
 
 ```bash
-pip install -r ingest/requirements.txt
-python -I ingest/extract.py                  # ระยะ 1: ทุกเอกสารใน sources.json (หรือ --only ev-t1-2568)
-python -I ingest/quality.py                  # รายงานคุณภาพ → ingest/out/quality.md
-python -I ingest/build_data.py               # ระยะ 2: → public/js/data.js + ingest/out/structure.md (--check = ตรวจอย่างเดียว)
-                                             #   แล้วรัน check_bm25.mjs --verify ให้เอง (ต้องมี node)
-node ingest/check_bm25.mjs                   # ดูว่าการค้นข้อความ (BM25 ตัวเดียวกับในแอป) เจออะไรสำหรับคำถามตัวอย่าง
+pip install -r ingest/requirements.txt       # pymupdf, pythainlp
+python -I ingest/extract.py                  # phase 1: every document in sources.json (or --only ev-t1-2568)
+python -I ingest/quality.py                  # quality report → ingest/out/quality.md
+python -I ingest/build_data.py               # phase 2: → public/js/data.js + ingest/out/structure.md (--check = validate only)
+                                             #   also runs check_bm25.mjs --verify (requires node)
+node ingest/check_bm25.mjs                   # what full-text search (the app's own BM25) finds for the example questions
 python -I -m unittest discover -s ingest/tests -v
 ```
 
-## ไฟล์
+Everything under `ingest/out/` is generated and is not committed.
 
-| ไฟล์ | หน้าที่ |
+## Files
+
+| File | Purpose |
 |---|---|
-| `sources.json` | ทะเบียนเอกสาร: id, key ในแอป (T1, EV1 …), prefix ของ clause id, ไฟล์, ผลิตภัณฑ์, ประเภท |
-| `thai_fix.py` | ซ่อมอักษรไทยระดับ glyph (ไม่มี I/O ทดสอบแยกได้) |
-| `extract.py` | PDF → ข้อความรายหน้า + ตาราง + ข้อมูลเลย์เอาต์ |
-| `quality.py` | วัดผลก่อน/หลังซ่อม และสร้างรายการให้คนตรวจ |
-| `tests/` | unit test จากตัวอย่างจริงในไฟล์ |
-| `out/pages/<id>.json` | ผลลัพธ์สำหรับเครื่อง: `pages[].text`, `pages[].tables[].rows`, `pages[].lines[]` (x, y, font, bold) |
-| `out/pages/<id>.md` | ผลลัพธ์สำหรับคนอ่านเทียบกับ PDF |
-| `out/quality.md` | ตารางคุณภาพ รายการให้ตรวจ และจำนวนการซ่อมแต่ละแบบ |
-| `structure.py` | ระยะ 2: ข้อความรายหน้า → หมวด → ข้อ → chunk (ไม่มี I/O ทดสอบแยกได้) |
-| `graph.py` | ระยะ 2: ชั้นกราฟที่ตรวจด้วยมือ: แผน, ความคุ้มครอง, grants, เงื่อนไข/ข้อยกเว้น, คำอธิบายข้อ, คำถามตัวอย่าง |
-| `build_data.py` | ระยะ 2: รวมทั้งสองส่วน ตรวจทุกการอ้างอิง แล้วเขียน `public/js/data.js` |
-| `graph_ext.py` | node ระยะ B: เหตุการณ์ ปัจจัย คำนิยาม กำหนดเวลา การไล่เบี้ย และ พ.ร.บ. เป็นแผน (`interp` = ต้องยืนยัน) |
-| `vehicles.py` | ยี่ห้อ/รุ่นรถในไทย + ระบบขับเคลื่อน (BEV/PHEV/EREV/HEV/ICE/ambiguous) ให้ route.js เลือกเงื่อนไข EV หรือปกติ; `python -I -X utf8 ingest/vehicles.py` = self-check |
-| `eval/questions.json`, `eval_route.mjs` | ชุดทดสอบ E1: รัน route.js + BM25 ของแอปกับคำถามทดสอบ เขียน `out/eval.md` |
-| `check_bm25.mjs` | รัน BM25 ของ `public/js/app.js` กับคำถามตัวอย่าง ใช้ตรวจข้อความ "ถ้าใช้แค่การค้นข้อความ" |
-| `out/structure.md` | ผลการแยกหมวด/ข้อของแต่ละเอกสาร ไว้เทียบกับ PDF |
+| `sources.json` | Document registry: id, in-app key (`T1`, `EV1`, …), clause-id prefix, file name, product, type |
+| `thai_fix.py` | Glyph-level Thai text repair (no I/O, unit-testable) |
+| `extract.py` | PDF → per-page text + tables + layout data |
+| `quality.py` | Before/after repair metrics and a manual review list |
+| `tests/` | Unit tests built from real samples in the files |
+| `structure.py` | Phase 2: page text → sections → clauses → chunks (no I/O, unit-testable) |
+| `graph.py` | Phase 2: the hand-reviewed graph layer: plans, coverages, grants, conditions/exclusions, clause descriptions, example questions |
+| `graph_ext.py` | Phase B nodes: events, factors, definitions, deadlines, recovery, and Compulsory Motor Insurance as a plan (`interp` = needs confirmation) |
+| `interp_review.py` | Review status of each interpretive reading |
+| `vehicles.py` | Car brands/models sold in Thailand + powertrain (BEV/PHEV/EREV/HEV/ICE/ambiguous), so `route.js` can choose EV or standard wordings. `python -I -X utf8 ingest/vehicles.py` runs a self-check |
+| `build_data.py` | Phase 2: merges both layers, validates every reference, and writes `public/js/data.js` |
+| `eval/questions.json`, `eval_route.mjs` | E1 eval set: runs the app's `route.js` + BM25 on test questions and writes `out/eval.md` |
+| `check_bm25.mjs` | Runs the BM25 from `public/js/app.js` on the example questions, to check the "text search only" comparisons |
+| `gap_report.mjs` | Lists policy clauses that no graph node cites yet |
+| `feedback_report.mjs` | Summarises answer feedback and drafts eval cases from 👎 |
 
-## สิ่งที่พบในไฟล์ต้นฉบับ และวิธีซ่อม
+### Outputs (`out/`, generated)
 
-**ฉบับ 2568 (ทำจาก InDesign ฟอนต์ DB Thai)**: วรรณยุกต์และสระบน/ล่างถูกวาด 2 ครั้งที่ตำแหน่งเดียวกัน
-และมี glyph ที่ไม่มีรหัสหรือรหัสผิด (`� Æ Ç Ã Ä Ê Ë`, `³` หลังสระอำ, `n`/`h` กว้างศูนย์) วางทับอยู่
-ข้อความดิบจึงออกมาเป็น `ภายใต้้การคุ้้�มครอง เงื่่Æอนไข` ตรวจทุกจุดแล้วพบว่า glyph แปลกปลอมเป็นตัว
-**เพิ่ม** ทับวรรณยุกต์จริงเสมอ ไม่ได้แทนตัวอักษรที่หาย จึงลบได้โดยไม่เสียข้อมูล
+| File | Contents |
+|---|---|
+| `out/pages/<id>.json` | Machine-readable: `pages[].text`, `pages[].tables[].rows`, `pages[].lines[]` (x, y, font, bold) |
+| `out/pages/<id>.md` | Human-readable, to compare against the PDF |
+| `out/quality.md` | Quality table, review list, and counts of each repair type |
+| `out/structure.md` | Section/clause split per document, to compare against the PDF |
 
-**ฉบับ 2563 (ทำจาก Word)**: สระอำถูกเก็บเป็น "ช่องว่างกว้างศูนย์ + า" (`ท า`, `ต ่า`) แก้โดยดูความกว้าง
-ของ glyph จึงไม่กระทบช่องว่างจริง
+## Phase 1: problems found in the source files, and the fixes
 
-**ตาราง**: ตัวดึงข้อความในตารางของ PyMuPDF เรียงตัวอักษรตามแกน x ทำให้วรรณยุกต์หลุด (`สญหาย ุ`)
-จึงใช้ `find_tables()` หาแค่ขอบเขตช่อง แล้วดึงข้อความในช่องเองตามลำดับใน stream
-ช่องที่มีรายการหลายคอลัมน์ไม่มีเส้นแบ่ง (รายชื่อศูนย์ลูกค้าสัมพันธ์) เก็บเป็นแถวคั่น tab
+**2025 edition (made in InDesign with the DB Thai font):** tone marks and upper/lower vowels are drawn twice at the same position, with glyphs that have no Unicode mapping or a wrong one (`� Æ Ç Ã Ä Ê Ë`, `³` after sara am, zero-width `n`/`h`) layered on top.
+Raw text therefore comes out as `ภายใต้้การคุ้้�มครอง เงื่่Æอนไข`. Checking every case showed that the stray glyphs are always **added** on top of a real tone mark and never replace a missing character, so they can be removed without losing information.
 
-**อื่น ๆ**: header/footer ที่ซ้ำทุกหน้าและเลขหน้าถูกตัดออก (เก็บไว้ใน `pages[].dropped`),
-บรรทัดที่อยู่บน baseline เดียวกันรวมเป็นแถวเดียวคั่น tab (เช่น `“บริษัท”	หมายถึง	...`)
+**2020 edition (made in Word):** sara am is stored as "zero-width space + า" (`ท า`, `ต ่า`). It is fixed by looking at glyph widths, so real spaces are not affected.
 
-## ผลลัพธ์ปัจจุบัน
+**Tables:** PyMuPDF's table text extraction orders characters along the x axis, which detaches tone marks (`สญหาย ุ`).
+So `find_tables()` is used only to find cell boundaries, and the cell text is extracted in stream order instead.
+Cells holding a multi-column list without separating lines (the customer service centre directory) are kept as tab-separated rows.
 
-ดูตัวเลขล่าสุดใน `out/quality.md` ณ วันที่เขียน: ความครอบคลุมพจนานุกรมของฉบับ 2568 จาก ~76% เป็น ~99.6%,
-ฉบับ 2563 จาก ~98.3% เป็น ~99.9%, อักษรแปลกปลอมและกลุ่มสระ/วรรณยุกต์ผิดเหลือ 0 ทุกไฟล์,
-ตาราง 21 ตาราง (อัตราคืนเบี้ย, ตารางชดใช้แบตเตอรี่ EV, รายชื่อศูนย์)
+**Other:** headers, footers and page numbers repeated on every page are removed (kept in `pages[].dropped`),
+and lines on the same baseline are merged into one tab-separated row (e.g. `“บริษัท”	หมายถึง	...`).
 
-## ข้อจำกัดที่รู้แล้ว
+### Results
 
-- คำพิมพ์ผิดในต้นฉบับไม่ถูกเดาแก้ แต่ขึ้นใน "รายการให้คนตรวจ" ของ `quality.md`
-  (ตอนนี้มี 1 จุด: `ผูเอาประกันภัย` ประเภท 5 หน้า 12) ส่วนสระซ้อนกันในต้นฉบับ (`ซึี่ง`) แก้อัตโนมัติและนับไว้ในรายงาน
-- เบอร์โทรในรายชื่อศูนย์บางเบอร์มีช่วงต่อท้าย (`0 2910 0710 9` น่าจะหมายถึง 0710-9) ต้นฉบับเก็บเป็นช่องว่าง
-- ตารางที่ไม่มีเส้นตาราง (เช่นขั้นส่วนลดประวัติดี) ยังเป็นบรรทัดข้อความคั่น tab ระยะ 2 จะแปลงเป็นโครงสร้าง
+See `out/quality.md` for the latest figures. At the time of writing:
 
-## ระยะ 2: แยกหมวด/ข้อ และสร้างกราฟ
+- Dictionary coverage, 2025 edition: **~76% → ~99.6%**
+- Dictionary coverage, 2020 edition: **~98.3% → ~99.9%**
+- Stray glyphs and malformed vowel/tone clusters: **0** in every file
+- **21 tables** recovered (premium refund rates, EV battery compensation, service centre directory)
 
-**แยกโครงสร้าง (`structure.py`)** หัวหมวดและหัวเอกสารแนบท้ายหาได้จากฟอนต์ (ฉบับ 2568 ใช้ DB Sathorn ≥ 14pt,
-ฉบับ 2563 ใช้ตัวหนา) หัวที่ยาวหลายบรรทัดถูกรวม และดึงรหัสเอกสารแนบท้ายออกมาเป็น id (`ร.ย.ภ.10` → `rp10`,
-`ร.ย.ฟ.01` → `ryf01`) ข้อ (`ข้อ N.`) และข้อย่อย (`N.M`) นับเป็นหัวข้อก็ต่อเมื่อเลขต่อจากข้อก่อนหน้า
-บรรทัดอย่าง `ข้อ 3.1.5 มาใช้บังคับโดยอนุโลม` (การอ้างอิงที่ขึ้นบรรทัดใหม่) จึงไม่ถูกตัดเป็นข้อใหม่
-และถ้ามีบรรทัดที่ดูเหมือนหัวข้อแต่เลขข้ามลำดับ จะถูกรายงานใน `out/structure.md` ให้คนตรวจ (ตอนนี้ 0 จุด)
-ตารางถูกแทรกตามตำแหน่งแนวตั้งเป็นแถวคั่น `|` และหน้ารายชื่อศูนย์ท้ายเล่มถูกตัดออก
+### Known limitations
 
-**ข้อความ** บรรทัดไทยที่ตัดคำต่อกันโดยไม่เว้นวรรค ขึ้นบรรทัดใหม่เมื่อเป็นย่อหน้าใหม่ (บรรทัดที่เยื้องเข้ามากกว่าบรรทัดถัดไป),
-รายการ (`(ก)`, `(1)`, `1.1.1`) ที่อยู่ขวากว่าขอบซ้ายของข้อ, แถวตาราง, คำนิยาม หรือหลังชื่อข้อที่เป็นตัวหนา
-`(ข) และ (ค)` ที่ขึ้นบรรทัดใหม่ตรงขอบซ้ายจึงยังต่ออยู่ในประโยคเดิม
-ตารางคำนิยามสองคอลัมน์ (`คำ<tab>หมายถึง<tab>ความหมาย` ที่คำอาจต่อบรรทัดในคอลัมน์ซ้าย และความหมายต่อบรรทัดในคอลัมน์ขวา)
-ถูกรวมเป็นบรรทัดละหนึ่งคำนิยาม รวมถึงกรณีที่ระยะ 1 ได้ `ห<tab>มายถึง` มา
+- Typos in the source are not auto-corrected but listed for review in `quality.md` (currently one: `ผูเอาประกันภัย`, Type 5, page 12). Doubled vowels in the source (`ซึี่ง`) are fixed automatically and counted in the report.
+- Some phone numbers in the service centre directory carry a range suffix (`0 2910 0710 9` probably means 0710-9); the source stores this as a space.
+- Tables without ruling lines (e.g. the no-claim discount steps) remain tab-separated text lines; phase 2 converts them into structure.
 
-**chunk** ข้อที่ยาวเกิน ~800 ตัวอักษรถูกแบ่งเป็นส่วน (`_p1`, `_p2` … อ้างเป็น "ส่วนที่ k/n") โดยตัดที่ต้นย่อหน้า รายการ หรือคำนิยาม
-และไม่แยกตารางออกจากหัวตาราง ถ้าย่อหน้าเดียวยาวเกินไป ตัดที่ช่องว่างหน้าคำเชื่อม (ทั้งนี้, ในกรณี, หาก, เว้นแต่ …)
-แทนการตัดกลางประโยค
+## Phase 2: sections, clauses and the graph
 
-**กราฟ (`graph.py`)** ทุกความสัมพันธ์ตรวจเทียบข้อความฉบับ 2568 แล้ว การอ้างข้อใช้ clause id (`t1_s4_4`)
-หรือ `id@วลี` เพื่อชี้ส่วนที่มีวลีนั้น (เช่นตารางแบตเตอรี่ใน `ev1_s4_2_2`) `build_data.py` จะไม่เขียนไฟล์
-ถ้าการอ้างอิงใดหาไม่เจอ วลีไฮไลต์ไม่อยู่ในข้อความ path ของคำถามตัวอย่างไม่ต่อกันจริง
-หรือช่องที่ "ไม่คุ้มครอง" ไม่มีเหตุผลกำกับ ดังนั้นถ้าฉบับใหม่เปลี่ยนเลขข้อหรือถ้อยคำ จะเห็นเป็น error ไม่ใช่คำตอบผิด
+**Structure (`structure.py`):** section and endorsement headings are detected from the font (DB Sathorn ≥ 14 pt in the 2025 edition, bold in the 2020 edition).
+Multi-line headings are merged, and endorsement codes become ids (`ร.ย.ภ.10` → `rp10`, `ร.ย.ฟ.01` → `ryf01`).
+A clause (`ข้อ N.`) or sub-clause (`N.M`) only counts as a heading if its number follows the previous one,
+so a line such as `ข้อ 3.1.5 มาใช้บังคับโดยอนุโลม` (a cross-reference that happens to start a new line) is not split off as a new clause.
+Lines that look like headings but skip the numbering are reported in `out/structure.md` for review (currently 0).
+Tables are inserted at their vertical position as `|`-separated rows, and the service centre directory pages at the back are dropped.
 
-สิ่งที่เปลี่ยนจากกราฟฉบับ 2563: เลขข้อยกเว้นหมวดที่ 2 ย้ายจาก 7.x เป็น 8.x และข้อสัญญาพิเศษจากข้อ 8 เป็นข้อ 9,
-หมวดที่ 4 ข้อยกเว้นการใช้ย้ายเป็นข้อ 10, ร.ย.ภ.10 ข้อยกเว้นเมาสุราเป็น 10.3, ประเภท 2 มีข้อยกเว้นเมาสุราของคู่กรณีเหมือนแผนอื่น
-และเพิ่มแผนรถยนต์ไฟฟ้า 3 แผน (แบตเตอรี่จ่ายตามอายุ 100% ลดปีละ 10% จนเหลือ 50%, ไม่รวมเครื่องชาร์จแต่รวมสายชาร์จแบบพกพา)
+**Text joining:** Thai has no spaces between words, so wrapped lines are joined without a space. A new line is started only for
+a new paragraph (a line indented further than the next), a list item (`(ก)`, `(1)`, `1.1.1`) indented past the clause's left margin, a table row, a definition, or after a bold clause title.
+That way `(ข) และ (ค)` wrapping onto a new line at the left margin stays part of the same sentence.
+Two-column definition tables (`term<tab>หมายถึง<tab>meaning`, where both the term and the meaning may wrap within their column)
+are merged into one definition per line, including cases where phase 1 produced `ห<tab>มายถึง`.
 
-**ข้อมูลในกราฟ** มี 3 ชั้น
-- ความคุ้มครอง 8 เรื่อง × 11 แผน (`grants`) แต่ละช่องมีเงื่อนไข ข้อยกเว้น ส่วนแรก และ **สิทธิที่ได้รับ** (`kind: "ben"`)
-  เช่น ขั้นต่ำ 500,000 บาท/คน, ค่าขาดประโยชน์ 500/700/1,000 บาท/วัน, บริษัทต่อสู้คดีให้, สำรองจ่ายเมื่อซอฟต์แวร์รถขัดข้อง,
-  เสียหายสิ้นเชิง (≥70%) จ่ายเต็มทุน, ค่าขนย้ายไม่เกิน 20%, ได้รถคืนเลือกรับหรือสละภายใน 30 วัน, ผลประโยชน์ ร.ย.01–03 รายข้อ
-- **เงื่อนไขทั่วไปของกรมธรรม์** (`topics` × `terms`) 10 เรื่องที่ไม่ได้ผูกกับความคุ้มครองเรื่องใด: การชำระเบี้ย, การแจ้งเคลม,
-  ปฏิเสธจ่ายโดยมิชอบ (ดอกเบี้ย 15%), อนุญาโตตุลาการ, ส่วนลดประวัติดี, เพิ่มเบี้ยประวัติไม่ดี, โอน/ขายรถ, ยกเลิกและคืนเบี้ย,
-  ฉ้อฉล, ข้อยกเว้นทั่วไป แต่ละแผนมีสรุปของตัวเอง ประเภท 4 (2563) ไม่มีบางเรื่องและถ้อยคำต่างในบางเรื่อง
-- คำถามตัวอย่าง พร้อม `bm25` ที่บอกว่าการค้นข้อความต้องได้ผลแบบที่ `textOnly` เขียนไว้ `build_data.py` ตรวจให้ทุกครั้ง
+**Chunks:** clauses longer than ~800 characters are split into parts (`_p1`, `_p2`, … cited as "part k/n"), cutting at the start of a paragraph, list item or definition,
+and never separating a table from its heading. If a single paragraph is too long, it is cut at the space before a connective (ทั้งนี้, ในกรณี, หาก, เว้นแต่, …)
+rather than mid-sentence.
 
-ประเภท 4 ป้องกันภัย (`T4SG`, แผน `p4sg`) ข้อ 0–16 ตรงกับประเภท 4 ทุกคำ (ตรวจทีละ chunk) และมีข้อ 17 ส่วนลดประวัติดี
-กับข้อ 18 เพิ่มเบี้ยประวัติไม่ดีเพิ่มมา `graph.py` สร้าง node ของสองเล่มจากแม่แบบเดียวกัน (`T4_DOCS`) และ `graph_ext._mirror_t4()`
-สร้าง node คู่ของ T4SG ให้ทุก node ที่อ้างประเภท 4 โดย build ยังตรวจทุกการอ้างอิงกับข้อความ T4SG จริง
+**Graph (`graph.py`):** every relationship has been checked against the 2025 wording. Clauses are cited by clause id (`t1_s4_4`),
+or `id@phrase` to point at the part containing that phrase (e.g. the battery table in `ev1_s4_2_2`). `build_data.py` refuses to write output if
+any reference cannot be found, a highlight phrase is not in the text, an example question's path is not actually connected,
+or a "not covered" cell has no stated reason. **If a new edition renumbers clauses or changes wording, you get a build error, not a wrong answer.**
 
-คำถามนอกขอบเขต (`graph_ext.OUT_OF_SCOPE` → `DATA.out_of_scope`): ประกันประเภทอื่น ราคาเบี้ย และให้เลือกบริษัท/อู่
-ถ้าทั้งคำถามอยู่นอกข้อมูล แอปตอบด้วยข้อความมาตรฐานโดยไม่เรียก Claude ถ้าแค่บางส่วน Claude ตอบส่วนที่เป็นประกันรถยนต์และบอกว่าส่วนนั้นไม่มีในข้อมูล
+Changes from the 2020 graph: Section 2 exclusions moved from 7.x to 8.x and special conditions from clause 8 to clause 9;
+Section 4's use exclusion moved to clause 10; the drunk-driving exclusion in ร.ย.ภ.10 became 10.3; Type 2 gained the third-party drunk-driving exclusion like the other plans;
+and three EV plans were added (battery paid by age: 100%, minus 10% a year down to 50%; the wall charger is excluded but the portable charging cable is included).
+
+### What the graph contains
+
+- **Coverage:** 8 topics × 11 plans (`grants`). Each cell has its conditions, exclusions, deductibles and **entitlements** (`kind: "ben"`),
+  for example a 500,000 THB/person minimum, loss of use of 500/700/1,000 THB/day, the insurer defending the case, advance payment when the car's software fails,
+  full sum insured for a total loss (≥ 70%), towing capped at 20%, a 30-day choice to take back or give up a recovered stolen car, and per-clause ร.ย.01–03 benefits.
+- **General policy terms** (`topics` × `terms`): 10 topics not tied to any one coverage: premium payment, claim notice,
+  wrongful claim denial (15% interest), arbitration, no-claim discount, claims-history surcharge, vehicle transfer/sale, cancellation and refund,
+  fraud, and general exclusions. Each plan has its own summary; Type 4 (2020) lacks some topics and words others differently.
+- **Example questions**, each with a `bm25` expectation of what full-text search should find (as described in `textOnly`). `build_data.py` checks these on every build.
+
+**Type 4 Protection** (`T4SG`, plan `p4sg`): clauses 0–16 are word-for-word identical to Type 4 (checked chunk by chunk), plus clause 17 (no-claim discount)
+and clause 18 (claims-history surcharge). `graph.py` builds the nodes of both documents from one template (`T4_DOCS`), and `graph_ext._mirror_t4()`
+creates a T4SG twin for every node that cites Type 4. The build still validates every reference against the real T4SG text.
+
+**Out-of-scope questions** (`graph_ext.OUT_OF_SCOPE` → `DATA.out_of_scope`): other insurance types, premium prices, and choosing an insurer or garage.
+If the whole question is out of scope, the app replies with a standard message without calling Claude. If only part is, Claude answers the motor insurance part and says the rest is not in the data.
 
 ```bash
-node ingest/gap_report.mjs           # ข้อที่ยังไม่มี node อ้าง → ingest/out/gap_report.md (build รันให้ทุกครั้ง)
-node ingest/gap_report.mjs --doc T1  # รายการช่องว่างของเอกสารเดียว
+node ingest/gap_report.mjs           # clauses no node cites yet → ingest/out/gap_report.md (run on every build)
+node ingest/gap_report.mjs --doc T1  # gaps for one document
 ```
 
-## ข้อจำกัดของระยะ 2
+### Known limitations
 
-- ประเภท 4 ยังเป็นเงื่อนไขฉบับ 2563 เพราะไม่มีฉบับ 2568 ใน `doc/`
-- ย่อหน้าที่ยาวมากบางย่อหน้ายังถูกตัดที่ช่องว่างระหว่างวลี (ไม่ใช่ต้นประโยค) และบางจุดที่ย่อหน้าใหม่ไม่ได้เยื้อง ข้อความยังต่อกันเป็นบรรทัดเดียว
-- น้ำท่วมในประเภท 1 เป็นการตีความ (ข้อตกลงไม่จำกัดภัยและไม่มีข้อยกเว้นน้ำท่วม) ยอมรับชั่วคราวใน `interp_review.py` รอฝ่ายสินไหมยืนยัน
-- แผน 3+ ไม่รวมหมวดสูญหายไฟไหม้ตามตารางกรมธรรม์ ซึ่งยังไม่มีในชุดข้อมูล
-- สรุปของ node ใหม่ (`desc`, `sum`) เขียนจากถ้อยคำในเล่มและ build ตรวจว่าอ้างข้อที่มีวลีนั้นจริง แต่ไม่ได้ตรวจว่าสรุปถูกต้องทุกคำ ควรให้ฝ่ายสินไหมอ่านทวน
+- Type 4 still uses the 2020 wording, because no 2025 edition is in `doc/`.
+- Some very long paragraphs are still cut at a space between phrases rather than at a sentence start, and where a new paragraph is not indented, the text stays joined as one line.
+- Flood under Type 1 is an interpretation (the cover is all-risks and has no flood exclusion). It is provisionally accepted in `interp_review.py` pending claims-team confirmation.
+- The 3+ plan does not include the theft/fire section as listed in its policy schedule, which is not in the dataset yet.
+- Summaries of new nodes (`desc`, `sum`) are written from the policy wording, and the build checks that they cite a clause containing that phrase, but the wording of each summary is not verified. They should be reviewed by the claims team.
