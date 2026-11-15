@@ -44,17 +44,37 @@ and get an answer grounded in the actual policy clauses, with the reasoning path
 
 ## Quick start
 
-**Requirements:** Node.js 22.9+ (uses `--env-file-if-exists`). An [Anthropic API key](https://console.anthropic.com/) is optional and only needed for free-text chat.
+**Requirements:** Node.js **22.9 or newer** (`npm start` uses `--env-file-if-exists`). Check with `node --version`.
+An [Anthropic API key](https://console.anthropic.com/) is optional and only needed for free-text chat.
 
 ```bash
 git clone https://github.com/Nothingtaro/graphrag-insurance-map.git
 cd graphrag-insurance-map
 npm install
-cp .env.example .env      # then set ANTHROPIC_API_KEY
-npm start                 # http://localhost:5173
 ```
 
-The built graph (`public/js/data.js`) is committed, so Python is **not** needed to run the app.
+Create `.env` from the template and put your key in it (skip this to run without chat):
+
+| macOS / Linux / Git Bash | Windows PowerShell | Windows cmd |
+|---|---|---|
+| `cp .env.example .env` | `Copy-Item .env.example .env` | `copy .env.example .env` |
+
+```bash
+npm start                 # open http://localhost:5173
+```
+
+That's all. The built graph (`public/js/data.js`) is committed, so Python is **not** needed to run the app.
+Python is only needed if you want to [rebuild the data](#data-pipeline) from the PDFs.
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `node: bad option: --env-file-if-exists` | Node.js is older than 22.9. Upgrade Node. |
+| `EADDRINUSE` on start | Port 5173 is taken. Set `PORT=5180` in `.env`. |
+| Chat replies with an error | `ANTHROPIC_API_KEY` is missing or invalid in `.env`. Restart `npm start` after editing it. |
+| Can't open the app from another device | The server only listens on `127.0.0.1` (this machine), by design, to keep your API key private. |
+| `build_data.py` fails with "ไม่พบ …" (not found) errors | A different PyMuPDF version is installed. Use a fresh virtual environment with `ingest/requirements.txt` (pinned versions). |
 
 ## Configuration
 
@@ -122,15 +142,20 @@ The graph is built from the policy PDFs in `doc/` by a Python pipeline in [`inge
 2. **Structure:** split pages into sections, clauses and chunks.
 3. **Build:** merge them with the hand-reviewed coverage graph (`ingest/graph.py`, `ingest/graph_ext.py`), check every reference, and write `public/js/data.js`.
 
+Requires **Python 3.11+**. Use a virtual environment: the library versions are pinned, because a different PyMuPDF version extracts text differently and the build checks then fail.
+
 ```bash
-pip install -r ingest/requirements.txt            # pymupdf, pythainlp
-python -I ingest/extract.py                       # PDF → ingest/out/pages/*.json
-python -I ingest/build_data.py                    # → public/js/data.js
-python -I -m unittest discover -s ingest/tests -v # unit tests
-node ingest/eval_route.mjs --strict               # router + BM25 eval set, fails on regression
+python -m venv .venv
+source .venv/bin/activate                          # Windows: .venv\Scripts\activate
+pip install -r ingest/requirements.txt             # pymupdf, pythainlp (pinned)
+
+python -I ingest/extract.py                        # PDF → ingest/out/pages/*.json
+python -I ingest/build_data.py                     # → public/js/data.js
+python -I -m unittest discover -s ingest/tests -v  # unit tests
+npm run eval                                       # router + BM25 eval set, fails on regression
 ```
 
-`ingest/out/` is generated and not committed.
+With the pinned versions, rebuilding reproduces the committed `data.js` byte for byte. `ingest/out/` is generated and not committed.
 
 **Current dataset:** 10 documents · 901 chunks · 11 plans (Type 1, 2+, 3+, 2, 3, 4, 4 Protection, EV Type 1–3, and Compulsory Motor Insurance) × 8 coverage topics · 213 condition/exclusion/deductible/entitlement nodes · 10 general policy terms.
 Wordings are the 1 January 2025 edition, except Type 4, Type 4 Protection and Compulsory Motor Insurance, which are still the 2020 edition.

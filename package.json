@@ -1,10 +1,14 @@
 {
   "name": "graphrag-insurance-map",
   "version": "0.1.0",
-  "description": "แผนที่ความรู้ความคุ้มครองประกันรถยนต์ (GraphRAG) — ported from a Claude artifact",
+  "description": "GraphRAG knowledge graph and AI assistant for Thai motor insurance policy wordings",
   "main": "server.mjs",
   "scripts": {
-    "start": "node --env-file-if-exists=.env server.mjs"
+    "start": "node --env-file-if-exists=.env server.mjs",
+    "eval": "node ingest/eval_route.mjs --strict"
+  },
+  "engines": {
+    "node": ">=22.9.0"
   },
   "type": "module",
   "dependencies": {

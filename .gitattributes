@@ -1,0 +1,6 @@
+# Keep LF in the repo and in every checkout, so Windows and macOS/Linux clones are identical
+* text=auto eol=lf
+
+*.pdf   binary
+*.png   binary
+*.woff2 binary

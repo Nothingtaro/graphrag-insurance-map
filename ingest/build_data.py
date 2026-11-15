@@ -443,7 +443,7 @@ def main() -> None:
         return
     header = ("// Built by ingest/build_data.py from ingest/out/pages/*.json (phase 1) and ingest/graph.py (hand-reviewed graph).\n"
               "// Do not edit by hand: change the rules in ingest/ and rebuild.\n")
-    OUT_JS.write_text(header + "const DATA = " + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n", encoding="utf-8")
+    OUT_JS.write_text(header + "const DATA = " + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n", encoding="utf-8", newline="\n")
     write_report(report, clauses)
     print(f"เขียน {OUT_JS.relative_to(ROOT)} ({OUT_JS.stat().st_size // 1024} KB) และ {OUT_REPORT.relative_to(ROOT)}")
     # the "text search alone" notes depend on the app's BM25, which is JavaScript

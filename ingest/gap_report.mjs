@@ -7,7 +7,7 @@
 // Annotations (highlight + plain meaning) are explanations, not nodes, so they do not count.
 // "ส่วนต่อ" marks a chunk whose clause has another part that is cited (often the tail of a long clause);
 // "หัวข้อ" marks a short chunk that is only a heading. Both usually need no node of their own.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
 const D = new Function(readFileSync(new URL('../public/js/data.js', import.meta.url), 'utf8') + ';return DATA')();
 const args = process.argv.slice(2);
@@ -50,6 +50,7 @@ rows.filter(r => r.gaps.length).forEach(r => {
   lines.push('', `## ${r.doc} · ${r.title}`, '', '| chunk | ข้อ | หน้า | หมายเหตุ | ข้อความ |', '|---|---|---|---|---|');
   r.gaps.forEach(x => lines.push(`| \`${x.k}\` | ${x.ref} | ${x.page ?? ''} | ${x.why} | ${x.text.replace(/\|/g, '/')} |`));
 });
+mkdirSync(new URL('out/', import.meta.url), { recursive: true });
 writeFileSync(new URL('out/gap_report.md', import.meta.url), lines.join('\n') + '\n');
 
 const short = rows.map(r => `${r.doc} ${r.real}`).join(' · ');

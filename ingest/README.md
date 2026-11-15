@@ -9,8 +9,11 @@ The data pipeline behind the app. It turns the policy wordings in [`doc/`](../do
 
 ## Usage
 
+Use Python 3.11+ in a fresh virtual environment. The versions in `requirements.txt` are pinned on purpose:
+PyMuPDF 2.x extracts some Thai lines differently, and `build_data.py` then refuses to build because quoted phrases no longer match.
+
 ```bash
-pip install -r ingest/requirements.txt       # pymupdf, pythainlp
+pip install -r ingest/requirements.txt       # pymupdf, pythainlp (pinned)
 python -I ingest/extract.py                  # phase 1: every document in sources.json (or --only ev-t1-2568)
 python -I ingest/quality.py                  # quality report → ingest/out/quality.md
 python -I ingest/build_data.py               # phase 2: → public/js/data.js + ingest/out/structure.md (--check = validate only)

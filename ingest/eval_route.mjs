@@ -4,7 +4,7 @@
 //   node ingest/eval_route.mjs --fail        list only the failing questions
 //   node ingest/eval_route.mjs --strict      exit 1 if a question without `target` fails (regression guard)
 // `clauses` passes when one of them is in what retrieve() sends: BM25 top 5 + clauses of matched events/factors and their details.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 const js = new URL('../public/js/', import.meta.url);
 const D = new Function(readFileSync(new URL('data.js', js), 'utf8') + ';return DATA')();
 const R = new Function(readFileSync(new URL('route.js', js), 'utf8') + ';return makeRouter')()(D);
@@ -54,6 +54,7 @@ const lines = [`# ผลชุดทดสอบ E1 (${new Date().toISOString().
   '| กลุ่ม | ผ่าน |', '|---|---|', ...sum.map(x => `| ${x.t} | ${x.ok}/${x.n} (${pct(x.ok, x.n)}) |`), '',
   '| id | ผล | แผนที่จับได้ | flags | ปัญหา |', '|---|---|---|---|---|',
   ...rows.map(x => `| ${x.q.id} | ${x.fails.length ? 'ไม่ผ่าน' + (x.q.target ? ` (รอ ${x.q.target})` : '') : 'ผ่าน'} | ${x.r.plans.join(', ') || '-'} | ${x.flags.join(', ') || '-'} | ${x.fails.join('; ').replace(/\|/g, '/') || ''} |`)];
+mkdirSync(new URL('out/', import.meta.url), { recursive: true });
 writeFileSync(new URL('out/eval.md', import.meta.url), lines.join('\n') + '\n');
 
 const show = args.includes('--fail') ? rows.filter(x => x.fails.length) : rows;

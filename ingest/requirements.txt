@@ -1,2 +1,4 @@
-pymupdf>=1.26
-pythainlp>=5.0
+# Pinned: text extraction differs between PyMuPDF versions (2.x breaks the build checks),
+# and these exact versions rebuild public/js/data.js byte-for-byte.
+pymupdf==1.27.2.3
+pythainlp==5.3.4
