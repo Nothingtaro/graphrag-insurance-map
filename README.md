@@ -185,7 +185,7 @@ The source code in this repository is released under the [MIT License](LICENSE),
 The MIT License does **not** cover:
 
 - **Policy wordings:** the PDFs in `doc/` and the policy text derived from them in `public/js/data.js` belong to their respective publishers.
-- **Third-party files:** Cytoscape.js (`public/vendor/`, MIT, The Cytoscape Consortium, license header kept in the file) and the IBM Plex Sans Thai and Sarabun web fonts (`public/fonts/`, distributed under the SIL Open Font License 1.1 by their authors).
+- **Third-party files:** Cytoscape.js (`public/vendor/`, MIT, The Cytoscape Consortium, license header kept in the file) and the IBM Plex Sans Thai and Sarabun web fonts (`public/fonts/`, SIL Open Font License 1.1, copyright IBM Corp. and The Sarabun Project Authors; license texts in [`public/fonts/`](public/fonts/)).
 
 ## Disclaimer
 
