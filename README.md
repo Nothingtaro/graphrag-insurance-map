@@ -25,6 +25,7 @@ and get an answer grounded in the actual policy clauses, with the reasoning path
 - [Data pipeline](#data-pipeline)
 - [Answer feedback](#answer-feedback)
 - [Limitations](#limitations)
+- [License](#license)
 - [Disclaimer](#disclaimer)
 
 ## Features
@@ -176,6 +177,15 @@ node ingest/feedback_report.mjs --to-eval   # draft eval cases from 👎 → ing
 - **Off-topic questions:** questions unrelated to insurance or cars do not touch the graph. Mid-conversation follow-ups ("explain more") are answered from the chat context.
 - **Schedule amounts:** sums insured and deductibles "as stated in the schedule" vary per policy and are not in the data.
 - **Interpretive readings:** 42 graph edges are interpretations, not literal wording (e.g. flood under Type 1). 35 are provisionally accepted ([`ingest/interp_review.py`](ingest/interp_review.py)) and still awaiting claims-team confirmation ([`research/b19_review/`](research/b19_review/README.md)).
+
+## License
+
+The source code in this repository is released under the [MIT License](LICENSE), Copyright (c) 2026 Chanon A.
+
+The MIT License does **not** cover:
+
+- **Policy wordings:** the PDFs in `doc/` and the policy text derived from them in `public/js/data.js` belong to their respective publishers.
+- **Third-party files:** Cytoscape.js (`public/vendor/`, MIT, The Cytoscape Consortium, license header kept in the file) and the IBM Plex Sans Thai and Sarabun web fonts (`public/fonts/`, distributed under the SIL Open Font License 1.1 by their authors).
 
 ## Disclaimer
 
